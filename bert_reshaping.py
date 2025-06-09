@@ -10,7 +10,7 @@ from sklearn.preprocessing import MinMaxScaler
 from pyts.image import GramianAngularField, RecurrencePlot
 import matplotlib.pyplot as plt
 import os
-
+import pandas as pd
 def save_images(dataset_name, X_data, y_data, arg):
     for i, (image, label) in enumerate(zip(X_data, y_data)):
         class_name = "malicious" if label == 1 else "benign"
@@ -23,16 +23,6 @@ def save_images(dataset_name, X_data, y_data, arg):
             colors = "rainbow"
         plt.imsave(file_path, image, cmap=colors)
     print(f"Imagens salvas em {base_dir}/{dataset_name}")
-
-def loadData(file):
-    with open(file, 'r', encoding="utf8") as f:
-        data = f.readlines()
-    result = []
-    for d in data:
-        d = d.strip()
-        if (len(d) > 0):
-            result.append(d)
-    return result
 
 def extract_features(text, model, tokenizer, device='cuda'):
     model = model.to(device)
@@ -55,24 +45,19 @@ def extract_features(text, model, tokenizer, device='cuda'):
     
     return features
 
-bad_requests = loadData('PreProcessedAnomalous.txt')
-good_requests = loadData('PreprocessedNormalTraining.txt')
 
-all_requests = bad_requests + good_requests
-labels_Bad = [1] * len(bad_requests)
-labels_Good = [0] * len(good_requests)
-labels = labels_Bad + labels_Good
-
-print("All request loaded")
-print("All labels signed")
+domains = pd.read_csv("dataset.csv")
+print(domains.head())
+domain_urls = domains['name'].values
+labels = domains['malicious'].values
 
 model = BertModel.from_pretrained('bert-large-uncased', output_hidden_states=True)
 tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
 print("Model Loaded")
 
 features = []
-for i in range(len(all_requests)):
-    features.append(extract_features(all_requests[i],model, tokenizer))
+for i in range(len(domains)):
+    features.append(extract_features(domain_urls[i],model, tokenizer))
 features = torch.cat(features).cpu().numpy()
 print("Shape of Samples after Feature Extraction", features.shape)
 X_train, X_test, y_train, y_test = train_test_split(
@@ -91,13 +76,13 @@ print("AUC no conjunto de teste:", test_auc)
 print("Acurácia: ", accuracy_score(y_test, y_pred))
 print(f"Desempenho atingido com resolução: {sqrt(len(features))}")
 
-pipeline = Pipeline([
-    ('pca', PCA(n_components=64)),
-    ('scaler', MinMaxScaler())
-])
-print("Shape of Samples after Feature Extraction", features.shape)
-features = pipeline.fit_transform(features)
-print(f"Shape of Unique Feature after resize (image): {features[0].shape}")
+#pipeline = Pipeline([
+ #   ('pca', PCA(n_components=64)),
+ #   ('scaler', MinMaxScaler())
+#])
+#print("Shape of Samples after Feature Extraction", features.shape)
+#features = pipeline.fit_transform(features)
+#print(f"Shape of Unique Feature after resize (image): {features[0].shape}")
 
 image_reshapes = {
     "GASF": GramianAngularField(method = "summation"),
@@ -105,30 +90,31 @@ image_reshapes = {
     "RPLOT": RecurrencePlot(dimension=1,threshold='point', percentage=20) 
 }
 i=0
-states = [0,100,1000]
-for state in states:   
-    for image_type, transformer in image_reshapes.items():
-        X_1d_transformed = transformer.fit_transform(features)
-        X_train, X_temp, y_train, y_temp = train_test_split(
-            X_1d_transformed, labels, test_size=0.3, stratify=labels, random_state=state
-        )
-        X_val, X_test, y_val, y_test = train_test_split(
-            X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=state
-        )
-        base_dir = f"datasets/BERT-PREPROCESSED/{str(image_type)}+{i}"
-        train_dir, val_dir, test_dir = [
-            os.path.join(base_dir, d) for d in ["train", "val", "test"]
-        ]
-        for subdir in [train_dir, val_dir, test_dir]:
-            os.makedirs(os.path.join(subdir, "benign"), exist_ok=True)
-            os.makedirs(os.path.join(subdir, "malicious"), exist_ok=True)
-            
-        datasets = {
-            "train": (X_train, y_train),
-            "val": (X_val, y_val),
-            "test": (X_test, y_test),
-        }
-        for dataset_name, (X_data, y_data) in datasets.items():
-            save_images(dataset_name, X_data, y_data, image_type)
-            print(f"Imagens {image_type}, geradas e salvas com sucesso!")
-    i+=1
+
+#states = [0,100,1000]
+#for state in states:   
+#    for image_type, transformer in image_reshapes.items():
+ #       X_1d_transformed = transformer.fit_transform(features)
+  #      X_train, X_temp, y_train, y_temp = train_test_split(
+     #       X_1d_transformed, labels, test_size=0.3, stratify=labels, random_state=state
+   #     )
+      #  X_val, X_test, y_val, y_test = train_test_split(
+       #     X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=state
+       # )
+       # base_dir = f"datasets/BERT-PREPROCESSED/{str(image_type)}+{i}"
+       # train_dir, val_dir, test_dir = [
+        #    os.path.join(base_dir, d) for d in ["train", "val", "test"]
+       # ]
+        #for subdir in [train_dir, val_dir, test_dir]:
+        #    os.makedirs(os.path.join(subdir, "benign"), exist_ok=True)
+        #    os.makedirs(os.path.join(subdir, "malicious"), exist_ok=True)
+        #    
+        #datasets = {
+         #   "train": (X_train, y_train),
+        ##    "val": (X_val, y_val),
+        #    "test": (X_test, y_test),
+        #}
+       # for dataset_name, (X_data, y_data) in datasets.items():
+       #     save_images(dataset_name, X_data, y_data, image_type)
+      #      print(f"Imagens {image_type}, geradas e salvas com sucesso!")
+   # i+=1

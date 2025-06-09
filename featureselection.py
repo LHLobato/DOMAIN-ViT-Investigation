@@ -13,8 +13,8 @@ import pandas as pd
 
 domains = pd.read_csv("dataset.csv")
 print(domains.head())
-domain_urls = domains['name']
-labels = domains['malicious']
+domain_urls = domains['name'].values
+labels = domains['malicious'].values
 res = 64
 vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3))
 X = vectorizer.fit_transform(domain_urls)
