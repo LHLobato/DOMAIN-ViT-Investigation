@@ -14,15 +14,20 @@ import pandas as pd
 domains = pd.read_csv("dataset.csv")
 print(domains.head())
 domain_urls = domains['name'].values
+dns = domains.drop(columns=['name','malicious'])
+print(dns.shape, dns.head())
+scaler = MinMaxScaler()
+dns = scaler.fit_transform(dns)
 labels = domains['malicious'].values
 res = 64
-vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3))
-X = vectorizer.fit_transform(domain_urls)
-
+vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
+X = vectorizer.fit_transform(domain_urls).toarray()
+X = scaler.fit_transform(X)
+data = np.hstack([X,dns])
 
 for state in [0,100,1000]:
     X_train, X_test, y_train, y_test = train_test_split(
-    X, labels, test_size=0.2, random_state=state
+    data, labels, test_size=0.2, random_state=state
     )
 
     classifier = RandomForestClassifier(n_estimators=200)
