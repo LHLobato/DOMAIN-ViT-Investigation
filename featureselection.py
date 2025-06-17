@@ -12,17 +12,28 @@ import torch
 import pandas as pd
 
 domains = pd.read_csv("dataset.csv")
+
 print(domains.head())
+
 domain_urls = domains['name'].values
+
 dns = domains.drop(columns=['name','malicious'])
+
 print(dns.shape, dns.head())
+
 scaler = MinMaxScaler()
+
 dns = scaler.fit_transform(dns)
+
 labels = domains['malicious'].values
+
 res = 64
-vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
+features = 4096
+
+vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=features)
 X = vectorizer.fit_transform(domain_urls).toarray()
 X = scaler.fit_transform(X)
+
 data = np.hstack([X,dns])
 
 for state in [0,100,1000]:
@@ -38,5 +49,5 @@ for state in [0,100,1000]:
     print("-------FOR TFIDVECTORIZER-----------")
     print("AUC no conjunto de teste:", test_auc)
     print("Acurácia: ", accuracy_score(y_test, y_pred))
-    print(f"Desempenho atingido com resolução: {res}")
+    print(f"Desempenho atingido com resolução: {features}")
 

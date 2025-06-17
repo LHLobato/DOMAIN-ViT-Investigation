@@ -11,6 +11,8 @@ from pyts.image import GramianAngularField, RecurrencePlot
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+import numpy as np
+
 def save_images(dataset_name, X_data, y_data, arg):
     for i, (image, label) in enumerate(zip(X_data, y_data)):
         class_name = "malicious" if label == 1 else "benign"
@@ -31,8 +33,9 @@ def extract_features(text, model, tokenizer, device='cuda'):
     attention_mask = inputs['attention_mask'].to(device)
     
     with torch.no_grad():
-        outputs = model(input_ids, attention_mask=attention_mask, output_hidden_states=True)
-        hidden_states = outputs.hidden_states  # Todas as camadas
+        with torch.amp.autocast('cuda'):
+            outputs = model(input_ids, attention_mask=attention_mask, output_hidden_states=True)
+            hidden_states = outputs.hidden_states  # Todas as camadas
     
     # Combinação vetorizada das últimas 4 camadas
     last_four_layers = torch.cat(hidden_states[-4:], dim=-1)
@@ -47,19 +50,48 @@ def extract_features(text, model, tokenizer, device='cuda'):
 
 
 domains = pd.read_csv("dataset.csv")
+
 print(domains.head())
+
 domain_urls = domains['name'].values
+
+features_dns = domains[domains.columns[2:]].values
+
 labels = domains['malicious'].values
 
 model = BertModel.from_pretrained('bert-large-uncased', output_hidden_states=True)
 tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
 print("Model Loaded")
 
-features = []
-for i in range(len(domains)):
-    features.append(extract_features(domain_urls[i],model, tokenizer))
-features = torch.cat(features).cpu().numpy()
-print("Shape of Samples after Feature Extraction", features.shape)
+features_np = []
+batch_size = 1024
+
+for i in range(0,len(domains), batch_size):
+    batch_domains = domain_urls[i:i + batch_size]
+    
+    batch_features_gpu = extract_features(batch_domains.tolist(), model, tokenizer)
+    batch_features_cpu_np = batch_features_gpu.cpu().numpy()
+    features_np.append(batch_features_cpu_np)
+    
+    
+    del batch_features_gpu 
+    torch.cuda.empty_cache()
+    import gc 
+    gc.collect() 
+    print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
+    
+features = np.concatenate(features_np, axis=0) 
+scaler = MinMaxScaler()
+features = scaler.fit_transform(features)
+
+print("Shape of Samples after Feature Extraction", features[0].shape)
+
+scaler = MinMaxScaler()
+features_dns = scaler.fit_transform(features_dns)
+features = np.concatenate((features, features_dns), axis=1)
+
+print("Shape of Samples after Feature Extraction + DNS Concatenate", features[0].shape)
+
 X_train, X_test, y_train, y_test = train_test_split(
     features, labels, test_size=0.2, random_state=0
 )
@@ -69,7 +101,7 @@ clf = RandomForestClassifier(n_estimators=200)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
-y_probs = clf.predict_proba(X_test)[:, 1]  # Probabilidades da classe positiva
+y_probs = clf.predict_proba(X_test)[:, 1]  
 test_auc = roc_auc_score(y_test, y_probs)
 print("-------FOR BERT TOKENIZER-----------")
 print("AUC no conjunto de teste:", test_auc)
@@ -77,8 +109,7 @@ print("Acurácia: ", accuracy_score(y_test, y_pred))
 print(f"Desempenho atingido com resolução: {sqrt(len(features))}")
 
 #pipeline = Pipeline([
- #   ('pca', PCA(n_components=64)),
- #   ('scaler', MinMaxScaler())
+ #   ('pca', PCA(n_components=64))
 #])
 #print("Shape of Samples after Feature Extraction", features.shape)
 #features = pipeline.fit_transform(features)
