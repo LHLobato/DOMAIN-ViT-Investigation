@@ -38,7 +38,7 @@ def extract_features(text, model, tokenizer, device='cuda'):
             hidden_states = outputs.hidden_states  # Todas as camadas
     
     # Combinação vetorizada das últimas 4 camadas
-    last_four_layers = torch.cat(hidden_states[-4:], dim=-1)
+    last_four_layers = torch.cat(hidden_states[-1:], dim=-1)
     
     # Pooling com máscara de atenção (ignora padding)
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_four_layers.size()).float()
@@ -59,8 +59,8 @@ features_dns = domains[domains.columns[2:]].values
 
 labels = domains['malicious'].values
 
-model = BertModel.from_pretrained('bert-large-uncased', output_hidden_states=True)
-tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
+model = BertModel.from_pretrained('bert-base-uncased', output_hidden_states=True)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 print("Model Loaded")
 
 features_np = []
@@ -83,21 +83,30 @@ for i in range(0,len(domains), batch_size):
 features = np.concatenate(features_np, axis=0) 
 scaler = MinMaxScaler()
 features = scaler.fit_transform(features)
+pca = PCA(n_components=64, random_state=42)
+
+
 
 print("Shape of Samples after Feature Extraction", features[0].shape)
 
 scaler = MinMaxScaler()
+
 features_dns = scaler.fit_transform(features_dns)
+
 features = np.concatenate((features, features_dns), axis=1)
 
 print("Shape of Samples after Feature Extraction + DNS Concatenate", features[0].shape)
+
+features = pca.fit_transform(features)
+
+print("Shape of Samples after PCA reduction", features[0].shape)
 
 X_train, X_test, y_train, y_test = train_test_split(
     features, labels, test_size=0.2, random_state=0
 )
 
 
-clf = RandomForestClassifier(n_estimators=200)
+clf = RandomForestClassifier(n_estimators=200, n_jobs=-1)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
