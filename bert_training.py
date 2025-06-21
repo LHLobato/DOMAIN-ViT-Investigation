@@ -34,9 +34,6 @@ labels = df['malicious'].values
 names = df['name'].values
 df = None
 
-print(f"First 5 domain: {names[:5]}")
-print(f"First 5 labels: {labels[:5]}")
-
 X_train, X_temp, y_train, y_temp = train_test_split(
     names, labels, test_size=0.30, random_state=0, stratify=labels
 )
@@ -64,7 +61,7 @@ raw_datasets = DatasetDict({
 
 
 
-model_path = "bert-case-uncased"
+model_path = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 
 id2label  = {0:"Benign", 1:"Malicious"}
@@ -87,8 +84,8 @@ tokenized_names = raw_datasets.map(preprocess_function, batched=True)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
 lr = 2e-4
-batch_size = 128
-num_epochs = 20
+batch_size = 512
+num_epochs = 40
 
 training_args = TrainingArguments(
     output_dir="bert-domain-classification",
@@ -102,6 +99,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="AUC",
     greater_is_better=True,
+    warmup_ratio=0.1,
 )
 
 trainer = Trainer(
@@ -119,7 +117,7 @@ trainer.train()
 predictions = trainer.predict(tokenized_names["test"])
 
 logits = predictions.predictions
-labels = predictions.labels_ids
+labels = predictions.label_ids
 
 
 print("Avaliação no Conjunto Final de teste dos domínios!")

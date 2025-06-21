@@ -37,8 +37,6 @@ for feature in features:
     X = scaler.fit_transform(X)
 
     data = np.hstack([X,dns])
-    pca = PCA(n_components=64, random_state=42)
-    data = pca.fit_transform(data)
 
     for state in [0,100]:
         X_train, X_test, y_train, y_test = train_test_split(
@@ -53,6 +51,6 @@ for feature in features:
         print("-------FOR TFIDVECTORIZER-----------")
         print("AUC no conjunto de teste:", test_auc)
         print("Acurácia: ", accuracy_score(y_test, y_pred))
-        print(f"Desempenho atingido com : {features} features no TfidfVectorizer.")
+        print(f"Desempenho atingido com : {feature} features no TfidfVectorizer.")
         print(f"Random state do das divisões: {state}.")
 

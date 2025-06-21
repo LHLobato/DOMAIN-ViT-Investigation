@@ -51,8 +51,6 @@ def extract_features(text, model, tokenizer, device='cuda'):
 
 domains = pd.read_csv("dataset.csv")
 
-print(domains.head())
-
 domain_urls = domains['name'].values
 
 features_dns = domains[domains.columns[2:]].values
@@ -83,9 +81,6 @@ for i in range(0,len(domains), batch_size):
 features = np.concatenate(features_np, axis=0) 
 scaler = MinMaxScaler()
 features = scaler.fit_transform(features)
-pca = PCA(n_components=64, random_state=42)
-
-
 
 print("Shape of Samples after Feature Extraction", features[0].shape)
 
@@ -96,10 +91,6 @@ features_dns = scaler.fit_transform(features_dns)
 features = np.concatenate((features, features_dns), axis=1)
 
 print("Shape of Samples after Feature Extraction + DNS Concatenate", features[0].shape)
-
-features = pca.fit_transform(features)
-
-print("Shape of Samples after PCA reduction", features[0].shape)
 
 X_train, X_test, y_train, y_test = train_test_split(
     features, labels, test_size=0.2, random_state=0
