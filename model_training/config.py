@@ -1,4 +1,4 @@
-sample_feature_extraction_type = ["TFIDV", "BERT-PREPROCESSED", "TFIVD-fullfeatures"]
+sample_feature_extraction_type = ["TFIDV", "BERT-PREPROCESSED"]
 current_dataset = sample_feature_extraction_type[1]
 DATA_DIR_0 = {
     "test":f"datasets/{current_dataset}/GASF0/test", 

@@ -28,7 +28,7 @@ def compute_metrics(eval_pred):
                                     references=labels)['accuracy'],4)
     return {"Accuracy": acc, "AUC": auc}
 
-df = pd.read_csv("dataset.csv")
+df = pd.read_csv("../datasets/dataset.csv")
 
 labels = df['malicious'].values
 names = df['name'].values
@@ -88,7 +88,7 @@ batch_size = 512
 num_epochs = 40
 
 training_args = TrainingArguments(
-    output_dir="bert-domain-classification",
+    output_dir="../results/bert-domain-classification",
     learning_rate=lr,
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size,

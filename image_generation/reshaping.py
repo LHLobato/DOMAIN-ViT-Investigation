@@ -25,19 +25,27 @@ def save_images(dataset_name, X_data, y_data, arg):
     print(f"Imagens salvas em {base_dir}/{dataset_name}")
 
 domains = pd.read_csv("dataset.csv")
-print(domains.head())
 domain_urls = domains['name']
 labels = domains['malicious']
 
-res = 64
+dns = domains.drop(columns=['name','malicious'])
 
-pipeline = Pipeline([
-    ('tfidf', TfidfVectorizer(analyzer = 'char', sublinear_tf = True, lowercase=False, max_features= res*res, ngram_range=(3,3))),
-    ('pca', PCA(n_components=res)),
-    ('scaler', MinMaxScaler())
-])
+scaler = MinMaxScaler()
 
-X_processed = pipeline.fit_transform(domain_urls)
+dns = scaler.fit_transform(dns)
+
+vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
+X = vectorizer.fit_transform(domain_urls).toarray()
+
+scaler = MinMaxScaler()
+
+X = scaler.fit_transform(X)
+
+data = np.hstack([X,dns])
+
+
+pca = PCA(n_components=64)
+X_processed = pca.fit_transform(data)
 
 
 image_reshapes = {
@@ -45,8 +53,9 @@ image_reshapes = {
     "GADF": GramianAngularField(method = "difference"),
     "RPLOT": RecurrencePlot(dimension=1,threshold='point', percentage=20) 
 }
-states = [0,100,1000]
+
 i=0
+
 states = [0,100,1000]
 for state in states:   
     for image_type, transformer in image_reshapes.items():

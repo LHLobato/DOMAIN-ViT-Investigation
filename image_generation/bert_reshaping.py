@@ -49,7 +49,7 @@ def extract_features(text, model, tokenizer, device='cuda'):
     return features
 
 
-domains = pd.read_csv("dataset.csv")
+domains = pd.read_csv("../datasets/dataset.csv")
 
 domain_urls = domains['name'].values
 
