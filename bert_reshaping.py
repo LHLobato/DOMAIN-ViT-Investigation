@@ -103,10 +103,11 @@ clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 y_probs = clf.predict_proba(X_test)[:, 1]  
 test_auc = roc_auc_score(y_test, y_probs)
+test_acc = accuracy_score(y_test, y_pred)
 print("-------FOR BERT TOKENIZER-----------")
 print("AUC no conjunto de teste:", test_auc)
-print("Acurácia: ", accuracy_score(y_test, y_pred))
-print(f"Desempenho atingido com resolução: {sqrt(len(features))}")
+print("Acurácia: ", test_acc)
+print(f"Desempenho atingido com resolução: {(len(features[0].shape))}")
 
 #pipeline = Pipeline([
  #   ('pca', PCA(n_components=64))
@@ -114,6 +115,28 @@ print(f"Desempenho atingido com resolução: {sqrt(len(features))}")
 #print("Shape of Samples after Feature Extraction", features.shape)
 #features = pipeline.fit_transform(features)
 #print(f"Shape of Unique Feature after resize (image): {features[0].shape}")
+results_path = "feature_selection.csv"
+results = {
+    "Test_ACC": test_acc,
+    "Test_AUC": test_auc,
+    "Vetorizador": "BertFeatureExtraction",
+    "Classificador": "Random Forest",
+    "Num_features":len(features[0].shape),
+}
+
+
+
+
+test_df = pd.DataFrame([results])
+
+if os.path.exists(results_path):
+    test_df.to_csv(results_path, mode='a', header=False, index=False)
+else:
+    test_df.to_csv(results_path, mode='w', header=True, index=False)
+
+
+
+
 
 image_reshapes = {
     "GASF": GramianAngularField(method = "summation"),
