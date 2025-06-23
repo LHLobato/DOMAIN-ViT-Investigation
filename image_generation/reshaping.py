@@ -35,9 +35,9 @@ scaler = MinMaxScaler()
 
 dns = scaler.fit_transform(dns)
 print("DNS Features Scaled")
-vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
+vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=1024)
 features_np = []
-batch_size = 4096
+batch_size = 2048
 
 for i in range(0,len(domains), batch_size):
     batch_domains = domain_urls[i:i + batch_size]
@@ -72,13 +72,53 @@ image_reshapes = {
 
 i=0
 
+
+samples_per_class = 5000
+total_subset_size = samples_per_class * 2 # 5000 benignas + 5000 malignas
+
+# --- 3. Separar Índices por Classe ---
+# Encontra os índices das amostras benignas e malignas no dataset completo
+benign_indices = np.where(labels == 0)[0]
+malicious_indices = np.where(labels == 1)[0]
+
+print(f"\nTotal de amostras benignas disponíveis: {len(benign_indices)}")
+print(f"Total de amostras malignas disponíveis: {len(malicious_indices)}")
+
+# --- 4. Selecionar Aleatoriamente 5000 Índices de Cada Classe ---
+# Verifica se há amostras suficientes para cada classe
+if len(benign_indices) < samples_per_class:
+    raise ValueError(f"Não há {samples_per_class} amostras benignas suficientes no dataset. Encontradas: {len(benign_indices)}")
+if len(malicious_indices) < samples_per_class:
+    raise ValueError(f"Não há {samples_per_class} amostras malignas suficientes no dataset. Encontradas: {len(malicious_indices)}")
+
+# Seleciona aleatoriamente 'samples_per_class' índices de cada grupo
+selected_benign_indices = np.random.choice(benign_indices, samples_per_class, replace=False)
+selected_malicious_indices = np.random.choice(malicious_indices, samples_per_class, replace=False)
+
+# --- 5. Combinar os Índices Selecionados e Criar o Subset ---
+# Concatena os índices selecionados de ambas as classes
+combined_subset_indices = np.concatenate([selected_benign_indices, selected_malicious_indices])
+
+# Embaralha os índices combinados para misturar as classes no subset
+np.random.shuffle(combined_subset_indices)
+
+# Usa os índices combinados para criar os subsets de X_processed e labels
+X_subset = X_processed[combined_subset_indices]
+labels_subset = labels[combined_subset_indices]
+
+# --- 6. Verificar o Subset Criado ---
+print(f"\nShape do X_subset criado: {X_subset.shape}")
+print(f"Shape do labels_subset criado: {labels_subset.shape}")
+print(f"Contagem de classes no subset: Benigno={np.sum(labels_subset == 0)}, Malicioso={np.sum(labels_subset == 1)}")
+
 states = [0,100,1000]
+c = 0
 for state in states:   
     for image_type, transformer in image_reshapes.items():
         features_np = []
-        batch_size = 4096
-        for i in range(0,len(X_processed), batch_size):
-            batch_domains = X_processed[i:i + batch_size]
+        batch_size = 128
+        for i in range(0,len(X_subset), batch_size):
+            batch_domains = X_subset[i:i + batch_size]
             batch_features_gpu = transformer.fit_transform(batch_domains)
             features_np.append(batch_features_gpu)
             gc.collect() 
@@ -86,12 +126,12 @@ for state in states:
         X_1d_transformed = np.concatenate(features_np,axis=0)
         print(f"Data after GAF processing: {len(X_1d_transformed)} Samples - {X_1d_transformed[0].shape} - Shape")
         X_train, X_temp, y_train, y_temp = train_test_split(
-            X_1d_transformed, labels, test_size=0.3, stratify=labels, random_state=state
+            X_1d_transformed, labels_subset, test_size=0.3, stratify=labels_subset, random_state=state
         )
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=state
         )
-        base_dir = f"../datasets/domain-TFIDV/{str(image_type)}{i}"
+        base_dir = f"../datasets/domain-TFIDV/{str(image_type)}{c}"
         train_dir, val_dir, test_dir = [
             os.path.join(base_dir, d) for d in ["train", "val", "test"]
         ]
@@ -108,4 +148,4 @@ for state in states:
             save_images(dataset_name, X_data, y_data, image_type)
             print(f"Imagens {image_type}, geradas e salvas com sucesso!")
         gc.collect()
-    i+=1
+    c+=1
