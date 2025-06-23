@@ -92,7 +92,7 @@ for state in states:
     val_indices, test_indices, _, _ = train_test_split(
         temp_indices, temp_labels, test_size=0.5, stratify=temp_labels, random_state=state
     )
-    
+    print("Só pra commitar")
     print(f"Divisão do dataset: {len(train_indices)} treino, {len(val_indices)} validação, {len(test_indices)} teste.")
 
     # PASSO 2: Criar um mapa para consulta rápida: de índice para conjunto
