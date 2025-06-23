@@ -12,8 +12,9 @@ import torch
 import pandas as pd
 from sklearn.decomposition import PCA
 
+import gc
 
-domains = pd.read_csv("dataset.csv")
+domains = pd.read_csv("../datasets/dataset.csv")
 
 print(domains.head())
 
@@ -53,4 +54,4 @@ for feature in features:
         print("Acurácia: ", accuracy_score(y_test, y_pred))
         print(f"Desempenho atingido com : {feature} features no TfidfVectorizer.")
         print(f"Random state do das divisões: {state}.")
-
+        gc.collect()

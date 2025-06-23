@@ -182,7 +182,7 @@ def test(model, test_loader,optimal_threshold):
         return test_loss / len(test_loader), test_accuracy, test_precision, test_recall, test_f1, test_auc
 
 save_dir = "../modelos/VIT/"
-test_dataset_dir = "../results/test0_https.csv"
+test_dataset_dir = "../results/domain_test.csv"
 image_names = ["GASF", "GADF", "RPLOT"]
 ig_count=0
 for data_dir in config.DATA_DIRS:    

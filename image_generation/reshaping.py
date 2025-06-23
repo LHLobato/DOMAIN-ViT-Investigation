@@ -24,7 +24,7 @@ def save_images(dataset_name, X_data, y_data, arg):
         plt.imsave(file_path, image, cmap=colors)
     print(f"Imagens salvas em {base_dir}/{dataset_name}")
 
-domains = pd.read_csv("dataset.csv")
+domains = pd.read_csv("../datasets/dataset.csv")
 domain_urls = domains['name']
 labels = domains['malicious']
 
@@ -33,20 +33,33 @@ dns = domains.drop(columns=['name','malicious'])
 scaler = MinMaxScaler()
 
 dns = scaler.fit_transform(dns)
-
+print("DNS Features Scaled")
 vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
-X = vectorizer.fit_transform(domain_urls).toarray()
+features_np = []
+batch_size = 1024
+
+for i in range(0,len(domains), batch_size):
+    batch_domains = domain_urls[i:i + batch_size]
+    
+    batch_features_gpu = vectorizer.fit_transform(batch_domains).toarray()
+    features_np.append(batch_features_gpu)
+    
+    import gc 
+    gc.collect() 
+    print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
+    
+X = np.concatenate(features_np, axis=0) 
 
 scaler = MinMaxScaler()
 
 X = scaler.fit_transform(X)
 
+print("Domain Vectorized Scaled")
 data = np.hstack([X,dns])
-
 
 pca = PCA(n_components=64)
 X_processed = pca.fit_transform(data)
-
+print("Dimensions Reduced In-Order to create Images")
 
 image_reshapes = {
     "GASF": GramianAngularField(method = "summation"),
@@ -66,7 +79,7 @@ for state in states:
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=state
         )
-        base_dir = f"datasets/domain-TFIDV/{str(image_type)}{i}"
+        base_dir = f"../datasets/domain-TFIDV/{str(image_type)}{i}"
         train_dir, val_dir, test_dir = [
             os.path.join(base_dir, d) for d in ["train", "val", "test"]
         ]
