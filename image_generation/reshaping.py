@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler 
 import pandas as pd
+import gc 
 
 def save_images(dataset_name, X_data, y_data, arg):
     for i, (image, label) in enumerate(zip(X_data, y_data)):
@@ -36,7 +37,7 @@ dns = scaler.fit_transform(dns)
 print("DNS Features Scaled")
 vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=4096)
 features_np = []
-batch_size = 1024
+batch_size = 4096
 
 for i in range(0,len(domains), batch_size):
     batch_domains = domain_urls[i:i + batch_size]
@@ -44,7 +45,6 @@ for i in range(0,len(domains), batch_size):
     batch_features_gpu = vectorizer.fit_transform(batch_domains).toarray()
     features_np.append(batch_features_gpu)
     
-    import gc 
     gc.collect() 
     print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
     
@@ -59,7 +59,10 @@ data = np.hstack([X,dns])
 
 pca = PCA(n_components=64)
 X_processed = pca.fit_transform(data)
+gc.collect()
+
 print("Dimensions Reduced In-Order to create Images")
+print(f"Shape after feature Reduction: {X_processed[0].shape}")
 
 image_reshapes = {
     "GASF": GramianAngularField(method = "summation"),
@@ -72,7 +75,16 @@ i=0
 states = [0,100,1000]
 for state in states:   
     for image_type, transformer in image_reshapes.items():
-        X_1d_transformed = transformer.fit_transform(X_processed)
+        features_np = []
+        batch_size = 4096
+        for i in range(0,len(X_processed), batch_size):
+            batch_domains = X_processed[i:i + batch_size]
+            batch_features_gpu = transformer.fit_transform(batch_domains)
+            features_np.append(batch_features_gpu)
+            gc.collect() 
+            print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
+        X_1d_transformed = np.concatenate(features_np,axis=0)
+        print(f"Data after GAF processing: {len(X_1d_transformed)} Samples - {X_1d_transformed[0].shape} - Shape")
         X_train, X_temp, y_train, y_temp = train_test_split(
             X_1d_transformed, labels, test_size=0.3, stratify=labels, random_state=state
         )
@@ -95,4 +107,5 @@ for state in states:
         for dataset_name, (X_data, y_data) in datasets.items():
             save_images(dataset_name, X_data, y_data, image_type)
             print(f"Imagens {image_type}, geradas e salvas com sucesso!")
+        gc.collect()
     i+=1
