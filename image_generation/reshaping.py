@@ -1,3 +1,4 @@
+# Imports originais
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.model_selection import GridSearchCV, train_test_split
@@ -12,57 +13,58 @@ from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
 import gc 
 
-def save_images(dataset_name, X_data, y_data, arg):
-    for i, (image, label) in enumerate(zip(X_data, y_data)):
-        class_name = "malicious" if label == 1 else "benign"
-        file_path = os.path.join(
-            base_dir, dataset_name, class_name, f"{class_name}_{i}.png"
-        )
-        if arg == "RPLOT":
-            colors = "binary"
-        else:
-            colors = "rainbow"
-        plt.imsave(file_path, image, cmap=colors)
-    print(f"Imagens salvas em {base_dir}/{dataset_name}")
+# --- Parte 1: Carregamento e Pré-processamento (praticamente inalterada) ---
+# Esta parte do seu código já é eficiente para carregar e transformar os dados.
 
+print("Iniciando o carregamento e pré-processamento...")
 domains = pd.read_csv("../datasets/dataset.csv")
 domain_urls = domains['name']
-labels = domains['malicious']
+labels = domains['malicious'].values # Usar .values para obter um array numpy para estratificação
 
 dns = domains.drop(columns=['name','malicious'])
 
 scaler = MinMaxScaler()
-
 dns = scaler.fit_transform(dns)
 print("DNS Features Scaled")
+
 vectorizer = TfidfVectorizer(analyzer="char", sublinear_tf=True,lowercase=False, ngram_range=(3,3), max_features=1024)
 features_np = []
 batch_size = 2048
 
 for i in range(0,len(domains), batch_size):
     batch_domains = domain_urls[i:i + batch_size]
-    
     batch_features_gpu = vectorizer.fit_transform(batch_domains).toarray()
     features_np.append(batch_features_gpu)
-    
     gc.collect() 
-    print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
+    print(f"Processado lote TF-IDF {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
     
 X = np.concatenate(features_np, axis=0) 
+del features_np
+gc.collect()
 
 scaler = MinMaxScaler()
-
 X = scaler.fit_transform(X)
 
 print("Domain Vectorized Scaled")
 data = np.hstack([X,dns])
+del X, dns
+gc.collect()
 
 pca = PCA(n_components=64)
 X_processed = pca.fit_transform(data)
+del data
 gc.collect()
 
 print("Dimensions Reduced In-Order to create Images")
-print(f"Shape after feature Reduction: {X_processed[0].shape}")
+print(f"Shape após redução (dataset completo): {X_processed.shape}")
+print(f"Total de amostras: {len(X_processed)}")
+print(f"Contagem de classes: Benigno={np.sum(labels == 0)}, Malicioso={np.sum(labels == 1)}")
+
+# --- FIM DA PARTE DE PRÉ-PROCESSAMENTO ---
+
+
+# --- INÍCIO DA LÓGICA DE GERAÇÃO E SALVAMENTO EM BATCH (MODIFICADA) ---
+# A seção de criação de subset foi removida.
 
 image_reshapes = {
     "GASF": GramianAngularField(method = "summation"),
@@ -70,82 +72,82 @@ image_reshapes = {
     "RPLOT": RecurrencePlot(dimension=1,threshold='point', percentage=20) 
 }
 
-i=0
+states = [0, 100, 1000]
+c = 0 # Contador para os diretórios de cada state (ex: GASF0, GASF1, etc)
 
-
-samples_per_class = 5000
-total_subset_size = samples_per_class * 2 # 5000 benignas + 5000 malignas
-
-# --- 3. Separar Índices por Classe ---
-# Encontra os índices das amostras benignas e malignas no dataset completo
-benign_indices = np.where(labels == 0)[0]
-malicious_indices = np.where(labels == 1)[0]
-
-print(f"\nTotal de amostras benignas disponíveis: {len(benign_indices)}")
-print(f"Total de amostras malignas disponíveis: {len(malicious_indices)}")
-
-# --- 4. Selecionar Aleatoriamente 5000 Índices de Cada Classe ---
-# Verifica se há amostras suficientes para cada classe
-if len(benign_indices) < samples_per_class:
-    raise ValueError(f"Não há {samples_per_class} amostras benignas suficientes no dataset. Encontradas: {len(benign_indices)}")
-if len(malicious_indices) < samples_per_class:
-    raise ValueError(f"Não há {samples_per_class} amostras malignas suficientes no dataset. Encontradas: {len(malicious_indices)}")
-
-# Seleciona aleatoriamente 'samples_per_class' índices de cada grupo
-selected_benign_indices = np.random.choice(benign_indices, samples_per_class, replace=False)
-selected_malicious_indices = np.random.choice(malicious_indices, samples_per_class, replace=False)
-
-# --- 5. Combinar os Índices Selecionados e Criar o Subset ---
-# Concatena os índices selecionados de ambas as classes
-combined_subset_indices = np.concatenate([selected_benign_indices, selected_malicious_indices])
-
-# Embaralha os índices combinados para misturar as classes no subset
-np.random.shuffle(combined_subset_indices)
-
-# Usa os índices combinados para criar os subsets de X_processed e labels
-X_subset = X_processed[combined_subset_indices]
-labels_subset = labels[combined_subset_indices]
-
-# --- 6. Verificar o Subset Criado ---
-print(f"\nShape do X_subset criado: {X_subset.shape}")
-print(f"Shape do labels_subset criado: {labels_subset.shape}")
-print(f"Contagem de classes no subset: Benigno={np.sum(labels_subset == 0)}, Malicioso={np.sum(labels_subset == 1)}")
-
-states = [0,100,1000]
-c = 0
 for state in states:   
+    print(f"\n--- INICIANDO EXECUÇÃO COM RANDOM_STATE = {state} ---")
+
+    # PASSO 1: Dividir os ÍNDICES do dataset completo ANTES de gerar imagens.
+    # Isso define para qual conjunto (train/val/test) cada amostra irá.
+    # `stratify=labels` é crucial para manter a proporção de classes.
+    all_indices = np.arange(len(X_processed))
+    
+    # Primeira divisão para obter o conjunto de treino (70%) e um conjunto temporário (30%)
+    train_indices, temp_indices, _, temp_labels = train_test_split(
+        all_indices, labels, test_size=0.3, stratify=labels, random_state=state
+    )
+    
+    # Segunda divisão no conjunto temporário para obter validação (15%) e teste (15%)
+    val_indices, test_indices, _, _ = train_test_split(
+        temp_indices, temp_labels, test_size=0.5, stratify=temp_labels, random_state=state
+    )
+    
+    print(f"Divisão do dataset: {len(train_indices)} treino, {len(val_indices)} validação, {len(test_indices)} teste.")
+
+    # PASSO 2: Criar um mapa para consulta rápida: de índice para conjunto
+    index_to_set_map = {idx: 'train' for idx in train_indices}
+    index_to_set_map.update({idx: 'val' for idx in val_indices})
+    index_to_set_map.update({idx: 'test' for idx in test_indices})
+
     for image_type, transformer in image_reshapes.items():
-        features_np = []
-        batch_size = 128
-        for i in range(0,len(X_subset), batch_size):
-            batch_domains = X_subset[i:i + batch_size]
-            batch_features_gpu = transformer.fit_transform(batch_domains)
-            features_np.append(batch_features_gpu)
-            gc.collect() 
-            print(f"Processado lote {i // batch_size + 1}/{(len(domain_urls) + batch_size - 1) // batch_size}")
-        X_1d_transformed = np.concatenate(features_np,axis=0)
-        print(f"Data after GAF processing: {len(X_1d_transformed)} Samples - {X_1d_transformed[0].shape} - Shape")
-        X_train, X_temp, y_train, y_temp = train_test_split(
-            X_1d_transformed, labels_subset, test_size=0.3, stratify=labels_subset, random_state=state
-        )
-        X_val, X_test, y_val, y_test = train_test_split(
-            X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=state
-        )
-        base_dir = f"../datasets/domain-TFIDV/{str(image_type)}{c}"
-        train_dir, val_dir, test_dir = [
-            os.path.join(base_dir, d) for d in ["train", "val", "test"]
-        ]
-        for subdir in [train_dir, val_dir, test_dir]:
-            os.makedirs(os.path.join(subdir, "benign"), exist_ok=True)
-            os.makedirs(os.path.join(subdir, "malicious"), exist_ok=True)
+        print(f"\n> Processando tipo de imagem: {image_type}")
+        base_dir = f"../datasets/domain-TFIDV-Full/{str(image_type)}{c}"
+
+        # PASSO 3: Criar diretórios e contadores de arquivo para esta execução
+        file_counters = {}
+        for subdir in ["train", "val", "test"]:
+            os.makedirs(os.path.join(base_dir, subdir, "benign"), exist_ok=True)
+            os.makedirs(os.path.join(base_dir, subdir, "malicious"), exist_ok=True)
+            file_counters[subdir] = {"benign": 0, "malicious": 0}
+
+        # PASSO 4: Processar em lotes e salvar imagens diretamente no disco
+        batch_size_imgs = 256 # Tamanho do lote para geração de imagens. Ajustável.
+
+        for i in range(0, len(X_processed), batch_size_imgs):
+            # Índices originais do lote atual
+            batch_original_indices = all_indices[i : i + batch_size_imgs]
             
-        datasets = {
-            "train": (X_train, y_train),
-            "val": (X_val, y_val),
-            "test": (X_test, y_test),
-        }
-        for dataset_name, (X_data, y_data) in datasets.items():
-            save_images(dataset_name, X_data, y_data, image_type)
-            print(f"Imagens {image_type}, geradas e salvas com sucesso!")
-        gc.collect()
-    c+=1
+            # Dados e rótulos correspondentes a este lote
+            batch_data = X_processed[batch_original_indices]
+            batch_labels = labels[batch_original_indices]
+            
+            # Gera as imagens APENAS para o lote atual
+            generated_images = transformer.fit_transform(batch_data)
+            
+            # Itera sobre as imagens geradas no lote para salvá-las
+            for j, original_idx in enumerate(batch_original_indices):
+                image_to_save = generated_images[j]
+                label = batch_labels[j]
+                
+                # Determina onde salvar usando o mapa
+                dataset_name = index_to_set_map[original_idx]  # 'train', 'val', ou 'test'
+                class_name = "malicious" if label == 1 else "benign"
+                
+                # Define cores e nome do arquivo
+                colors = "binary" if image_type == "RPLOT" else "rainbow"
+                count = file_counters[dataset_name][class_name]
+                file_path = os.path.join(base_dir, dataset_name, class_name, f"{class_name}_{count}.png")
+                
+                # Salva a imagem e incrementa o contador
+                plt.imsave(file_path, image_to_save, cmap=colors)
+                file_counters[dataset_name][class_name] += 1
+
+            print(f"  Lote de imagens {image_type} {i // batch_size_imgs + 1}/{(len(X_processed) + batch_size_imgs - 1) // batch_size_imgs} salvo.")
+            gc.collect()
+            
+        print(f"Imagens {image_type} (state {state}) geradas e salvas com sucesso!")
+        
+    c += 1
+
+print("\n--- PROCESSO TOTALMENTE CONCLUÍDO ---")
